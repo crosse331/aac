@@ -279,11 +279,11 @@ namespace AvitoAppConsole
                             });
 
 
-                            var button = Driver.FindElement(By.ClassName("js-item-extended-contacts"));
+                            var button = l.FindElement(By.ClassName("js-item-extended-contacts"));
 
                             if (button != null)
                             {
-                                driverActions.MoveToElement(button);
+                                driverActions.MoveToElement(button).Perform();
                                 //action.Click();
                                 driverActions.Click();
                                 Driver.Manage().Timeouts().ImplicitWait = TimeSpan.FromSeconds(5);
