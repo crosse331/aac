@@ -10,9 +10,9 @@ using OpenQA.Selenium.PhantomJS;
 using OpenQA.Selenium.Chrome;
 using OpenQA.Selenium.Interactions;
 using System.Collections.ObjectModel;
-using tessnet2;
 using System.Drawing;
 using System.Net;
+using System.Text.RegularExpressions;
 
 namespace AvitoAppConsole
 {
@@ -24,7 +24,7 @@ namespace AvitoAppConsole
 
         private string defCity = "kaliningrad";
 
-        private string _avitoPath = "https://www.avito.ru/{0}/avtomobili";
+        private string _avitoPath = "https://m.avito.ru/{0}/avtomobili";
 
         private bool _needMinPrice = false;
         private bool _needMaxPrice = false;
@@ -36,6 +36,7 @@ namespace AvitoAppConsole
         private string listStr = "view=list";
 
         private StreamWriter streamWriter = null;
+        private StreamWriter logWriter = null;
         //private Tesseract tesseract = null;
 
         private int pagesCount = 0;
@@ -66,7 +67,7 @@ namespace AvitoAppConsole
 
         public Program()
         {
-            streamWriter = new StreamWriter("log.txt");
+            logWriter = new StreamWriter("log.txt");
             driverActions = new Actions(Driver);
             //tesseract = new Tesseract();
             //tesseract.SetVariable("tessedit_char_whitelist", "0123456789");
@@ -80,8 +81,15 @@ namespace AvitoAppConsole
             //GetScreenshot();
 
             //this.Login();
-            this.Parse();
-            
+            //this.Parse();
+            this.ParseMobVer();
+
+            //var cont = this.ParseTargetPage("https://m.avito.ru/kaliningrad/avtomobili/bmw_x3_2008_1537953362");
+
+            //var cont = new InfoContainer() { path = "https://m.avito.ru/kaliningrad/avtomobili/bmw_x3_2008_1537953362" };
+
+            //this.ParseTargetPage(cont);
+
 
             //var scr = Driver.GetScreenshot();
             //scr.SaveAsFile("test.jpg", ScreenshotImageFormat.Jpeg);
@@ -92,6 +100,15 @@ namespace AvitoAppConsole
         {
             Driver.Quit();
             streamWriter.Close();
+            this.logWriter.Close();
+        }
+
+        private void SaveToFile()
+        {
+            foreach (var cont in _infoContainers)
+            {
+                this.WriteToLog(cont.ToString());
+            }
         }
 
         private void GetScreenshot()
@@ -100,33 +117,6 @@ namespace AvitoAppConsole
             //streamWriter.WriteLine(Driver.Url);
             //scr.SaveAsFile("test.jpg", ScreenshotImageFormat.Jpeg);
             CloseProgram();
-        }
-
-        private void GetPhone(IWebElement src)
-        {
-            var client = new WebClient();
-
-            var pic = client.DownloadData(src.GetAttribute("src"));
-
-            File.WriteAllBytes("tmp_phone", pic);
-
-            //var image = Image.FromFile("tmp_phone");
-        }
-
-        private void GetScreenshot(string fileName)
-        {
-            return;
-            var scr = Driver.GetScreenshot();
-            //streamWriter.WriteLine(Driver.Url);
-            scr.SaveAsFile(fileName, ScreenshotImageFormat.Jpeg);
-        }
-
-        private void InitScreenshot()
-        {
-            return;
-            pageScr = Driver.GetScreenshot();
-            pageScr.SaveAsFile("tmp_page.jpg", ScreenshotImageFormat.Jpeg);
-            pageBmp = (Bitmap)Image.FromFile("tmp_page.jpg");
         }
 
         private Screenshot pageScr = null;
@@ -151,56 +141,23 @@ namespace AvitoAppConsole
         {
             Driver.Navigate().GoToUrl("https://www.avito.ru/");
 
-            var allDivA = Driver.FindElements(By.XPath(".//div/a"));
-            bool isLogined = true;
-            foreach (var button in allDivA)
+            bool isLogined = false;
+            while (!isLogined)
             {
-                if (button.Text == "Вход и регистрация")
-                {
-                    driverActions.MoveToElement(button);
-                    driverActions.Click();
-                    isLogined = false;
-                }
-            }
+                var allDivA = Driver.FindElements(By.XPath(".//div/a"));
 
-            if (isLogined)
-            {
-                this.GetScreenshot();
-                return;
-            }
-
-            var allDivInputs = Driver.FindElements(By.XPath(".//div/input"));
-            bool isLogin = false;
-            bool isPasswrod = false;
-            foreach (var inp in allDivInputs)
-            {
-                if (!isLogin && inp.GetAttribute("placeholder") == "Телефон или электронная почта")
+                isLogined = true;
+                foreach (var button in allDivA)
                 {
-                    driverActions.MoveToElement(inp);
-                    driverActions.Click();
-                    driverActions.SendKeys("89814506291");
-                    isLogin = true;
-                }
-                if (!isPasswrod && inp.GetAttribute("placeholder") == "Пароль")
-                {
-                    driverActions.MoveToElement(inp);
-                    driverActions.Click();
-                    driverActions.SendKeys("918171Ss");
-                    isPasswrod = true;
-                    if (isLogin)
+                    if (button.Text == "Вход и регистрация")
                     {
-                        driverActions.SendKeys(Keys.Enter);
+                        //driverActions.Click();
+                        isLogined = false;
                         break;
                     }
                 }
-                if (isLogin && isPasswrod)
-                {
-                    driverActions.SendKeys(Keys.Enter);
-                    break;
-                }
+                Thread.Sleep(2000);
             }
-
-            this.GetScreenshot();
         }
 
         private void Parse()
@@ -273,17 +230,22 @@ namespace AvitoAppConsole
                         var titleButton = l.FindElement(By.XPath(".//h3/a"));
                         string path = titleButton.GetAttribute("href");
 
-                        if (_infoContainers.Find((item) => { return item.path == path; }) == null)
-                        {
-                            _infoContainers.Add(new InfoContainer()
-                            {
-                                path = path,
-                                title = titleButton.Text,
-                                price = l.FindElement(By.ClassName("price")).Text,
-                                description = l.FindElement(By.ClassName("specific-params")).Text,
-                            });
+                        //if (_infoContainers.Find((item) => { return item.path == path; }) == null)
+                        //{
+                        //    _infoContainers.Add(new InfoContainer()
+                        //    {
+                        //        path = path,
+                        //        title = titleButton.Text,
+                        //        price = l.FindElement(By.ClassName("price")).Text,
+                        //        description = l.FindElement(By.ClassName("specific-params")).Text,
+                        //    });
 
-                            //this.WriteToLog(_infoContainers[_infoContainers.Count - 1].ToString());
+                        //    //this.WriteToLog(_infoContainers[_infoContainers.Count - 1].ToString());
+                        //}
+
+                        if (_infoContainers.Find((item) => { return item.url == path; }) == null)
+                        {
+                            _infoContainers.Add(this.ParseTargetPage(path));
                         }
 
                     }
@@ -319,13 +281,110 @@ namespace AvitoAppConsole
             this.CloseProgram();
         }
 
+        private void ParseMobVer()
+        {
+            Driver.Navigate().GoToUrl(this.ConstructPath());
+
+            int curIndex = 1;
+            var start = DateTime.Now;
+            int totalNew = 0;
+
+            string dir = dataFolder;
+            if (!Directory.Exists(dir))
+            {
+                Directory.CreateDirectory(dir);
+            }
+            string pathToFile = dir + "\\" + defCity + ".csv";
+            if (File.Exists(pathToFile))
+            {
+                var streamReader = new StreamReader(pathToFile);
+                string tmp = streamReader.ReadLine();
+                while (!string.IsNullOrEmpty(tmp))
+                {
+                    _infoContainers.Add(new InfoContainer(tmp));
+                    tmp = streamReader.ReadLine();
+                }
+                streamReader.Close();
+            }
+            streamWriter = new StreamWriter(pathToFile);
+
+            try
+            {
+                while (true)
+                {
+                    string url = this.ConstructPath();
+                    if (curIndex != 1)
+                    {
+                        this.AddArgumentAtPath(ref url, "p", curIndex.ToString());
+                    }
+                    Driver.Navigate().GoToUrl(url);
+
+                    if ((curIndex != 1 && !Driver.Url.Contains("&p=")) || curIndex == 2)
+                    {
+                        break;
+                    }
+
+                    var list = Driver.FindElements(By.ClassName("b-item-wrapper"));
+                    foreach (var el in list)
+                    {
+                        string locUrl = el.FindElement(By.TagName("a")).GetAttribute("href");
+
+                        if (_infoContainers.Find((elem) => { return elem.url == locUrl; }) == null)
+                        {
+                            _infoContainers.Add(new InfoContainer() { url = locUrl });
+                            _infoContainers[_infoContainers.Count - 1].price =
+                                el.FindElement(By.ClassName("item-price-value")).Text;
+                        }
+                    }
+
+                    foreach (var info in _infoContainers)
+                    {
+                        if (info.title == string.Empty)
+                        {
+                            info.UpdateContainer(this.ParseTargetPage(info.url));
+                            totalNew++;
+                        }
+                        else
+                        {
+                            if (!TestUrl(info.url))
+                            {
+
+                            }
+                        }
+                    }
+
+                    curIndex++;
+                }
+            }
+            catch (Exception e)
+            {
+                logWriter.WriteLine(e.ToString());
+            }
+            finally
+            {
+                this.SaveToFile();
+                this.logWriter.WriteLine("Total pages : " + (curIndex - 1).ToString());
+                var totalTime = (DateTime.Now - start);
+                this.logWriter.WriteLine("Total time : " +
+                    Math.Round(totalTime.TotalHours) + "h " +
+                    Math.Round(totalTime.TotalMinutes) + "m " +
+                    Math.Round(totalTime.TotalSeconds % 60) + "s : " +
+                    totalTime.TotalSeconds + "ts");
+                    
+                this.logWriter.WriteLine("Total new : " + totalNew.ToString());
+                this.logWriter.WriteLine("Total pages : " + _infoContainers.Count.ToString());
+            }
+
+            this.CloseProgram();
+        }
+
         private void ParseTargetPage(InfoContainer container)
         {
-            Driver.Navigate().GoToUrl(container.path);
+            Driver.Navigate().GoToUrl(container.url);
             var nameTmp = Driver.FindElement(By.ClassName("seller-info-value"));
             container.name = nameTmp.Text;
 
-            var phoneTmp = Driver.FindElement(By.ClassName("item-phone-number"));
+            var phoneTmp = Driver.FindElement(By.ClassName("write-message-btn"));
             //phoneTmp = phoneTmp.FindElement(By.XPath("//div/a"));
 
             phoneTmp.Click();
@@ -337,9 +396,62 @@ namespace AvitoAppConsole
             //phoneTmp.Click();
             Thread.Sleep(2000);
 
-            phoneTmp = phoneTmp.FindElement(By.XPath("//img"));
+            phoneTmp = Driver.FindElement(By.XPath(".//div[@class='action-phone']/button"));
+            phoneTmp.Click();
+            Thread.Sleep(2000);
 
-            container.number = phoneTmp.GetAttribute("src");
+            container.number = Driver.FindElement(By.ClassName("action-phone__result")).Text;
+        }
+
+        public InfoContainer ParseTargetPage(string url)
+        {
+            var result = new InfoContainer();
+            result.url = url;
+
+            Driver.Navigate().GoToUrl(url);
+
+            var tmp = Driver.FindElement(By.ClassName("single-item-header"));
+            result.title = tmp.Text;
+            tmp = Driver.FindElement(By.ClassName("price-value"));
+            result.price = tmp.Text;
+            tmp = Driver.FindElement(By.ClassName("info-params"));
+            var tmp2 = tmp.FindElements(By.ClassName("param"));
+            string descStr = string.Empty;
+            foreach (var desc in tmp2)
+            {
+                descStr += desc.Text + "_";
+            }
+            result.description = descStr;
+
+            tmp = Driver.FindElement(By.ClassName("person-name"));
+            result.name = tmp.Text;
+            result.userId = GetUserId(tmp.GetAttribute("href"));
+
+            tmp = Driver.FindElement(By.ClassName("amw-test-item-click"));
+            tmp.Click();
+            Thread.Sleep(2000);
+
+            tmp = Driver.FindElement(By.ClassName("amw-test-item-click"));
+            result.number = tmp.Text;
+
+            return result;
+        }
+
+        private bool TestUrl(string url)
+        {
+            Driver.Navigate().GoToUrl(url);
+            return Driver.Url == url;
+        }
+
+        private string GetUserId(string url)
+        {
+            string result = string.Empty;
+            int index = url.IndexOf("user/") + 4;
+            url = url.Remove(0, index);
+            index = url.IndexOf("/");
+            result = url.Remove(index);
+
+            return result;
         }
 
         private void FindPagesCount()
@@ -413,19 +525,21 @@ namespace AvitoAppConsole
 
     public class InfoContainer
     {
-        public string path;
+        public string url;
         public string title;
         public string number;
         public string price;
         public string description;
         public string name;
 
+        public string userId;
+
         public override string ToString()
         {
             string result = string.Empty;
 
-            result = path + ";" + title + ";" + number + ";" + price + ";" +
-                description + ";" + name;
+            result = url + ";" + title + ";" + number + ";" + price + ";" +
+                description + ";" + name + ";" + userId ;
             result = result.Replace(",", "_");
             result = result.Replace(" ", "_");
             result = result.Replace("__", "_");
@@ -463,16 +577,28 @@ namespace AvitoAppConsole
                 return;
             }
 
-            while (strings.Count < 6)
+            while (strings.Count < 7)
             {
                 strings.Add("");
             }
-            this.path = strings[0];
+            this.url = strings[0];
             this.title = strings[1];
             this.number = strings[2];
             this.price = strings[3];
             this.description = strings[4];
             this.name = strings[5];
+            this.userId = strings[6];
+        }
+
+        public void UpdateContainer(InfoContainer c)
+        {
+            this.url = c.url;
+            this.title = c.title;
+            this.price = c.price;
+            this.name = c.name;
+            this.number = c.number;
+            this.description = c.description;
+            this.userId = c.userId;
         }
     }
 }
